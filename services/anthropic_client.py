@@ -7,7 +7,7 @@ from anthropic import AsyncAnthropic
 
 import config
 
-log = logging.getLogger("bookclub.anthropic")
+log = logging.getLogger("pepper.services.anthropic")
 
 # Haiku is cheapest and plenty smart for short prompt generation.
 MODEL = "claude-haiku-4-5-20251001"

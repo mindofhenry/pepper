@@ -8,7 +8,7 @@ import asyncpg
 
 import config
 
-log = logging.getLogger("bookclub.db")
+log = logging.getLogger("pepper.db")
 
 _pool: Optional[asyncpg.Pool] = None
 

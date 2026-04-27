@@ -6,7 +6,7 @@ import aiohttp
 
 import config
 
-log = logging.getLogger("bookclub.google_books")
+log = logging.getLogger("pepper.services.google_books")
 
 BASE_URL = "https://www.googleapis.com/books/v1/volumes"
 
