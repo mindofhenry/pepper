@@ -1,17 +1,20 @@
 """Reading section commands. Sections are group reading assignments with a
-dedicated discussion thread. One active section per guild at a time."""
+dedicated discussion thread. One active section per guild at a time.
+
+The /section prompts subcommand is implemented in `prompts.py`; this cog
+just registers the command on the shared section group and delegates."""
 import logging
-import json
-from services import anthropic_client
 from typing import Optional
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
-import db
+from shared import db
+from shared.errors import report_command_error
+from . import prompts as prompts_impl
 
-log = logging.getLogger("bookclub.cogs.sections")
+log = logging.getLogger("pepper.cogs.book_club.sections")
 
 
 def _format_section_label(end_chapter: Optional[int], end_page: Optional[int]) -> str:
@@ -181,79 +184,20 @@ class Sections(commands.Cog):
         label = _format_section_label(row["end_chapter"], row["end_page"])
         await interaction.followup.send(f"Section #{row['id']} ({label}) closed.")
 
-
     @section_group.command(name="prompts", description="Generate AI discussion prompts for the active section.")
     async def prompts(self, interaction: discord.Interaction) -> None:
-        """Return 4 Haiku-generated discussion prompts. Cached per (book, endpoints)."""
+        """Delegate to prompts.py. The implementation handles cache, Haiku
+        call, and MIN-28 chunked send."""
         await interaction.response.defer()
+        await prompts_impl.generate_and_send(interaction)
 
-        async with db.pool().acquire() as conn:
-            section = await conn.fetchrow(
-                """
-                SELECT s.id, s.book_id, s.end_chapter, s.end_page,
-                       b.title, b.authors
-                FROM reading_sections s
-                JOIN books b ON b.id = s.book_id
-                WHERE s.guild_id = $1 AND s.status = 'active'
-                """,
-                interaction.guild_id,
-            )
-        if not section:
-            await interaction.followup.send("No active section. Run `/section new` first.")
-            return
+    async def cog_command_error(
+        self,
+        interaction: discord.Interaction,
+        error: app_commands.AppCommandError,
+    ) -> None:
+        await report_command_error("book_club.sections", interaction, error)
 
-        # Cache lookup. end_chapter/end_page may be NULL; NULL = NULL is false in SQL,
-        # so use IS NOT DISTINCT FROM for proper NULL-aware equality.
-        async with db.pool().acquire() as conn:
-            cached = await conn.fetchrow(
-                """
-                SELECT prompts_json, generated_at FROM discussion_prompts
-                WHERE book_id = $1
-                  AND end_chapter IS NOT DISTINCT FROM $2
-                  AND end_page IS NOT DISTINCT FROM $3
-                """,
-                section["book_id"], section["end_chapter"], section["end_page"],
-            )
-
-        if cached:
-            prompts_list = cached["prompts_json"]
-            cache_status = "cached"
-        else:
-            prompts_list = await anthropic_client.generate_discussion_prompts(
-                title=section["title"],
-                authors=section["authors"],
-                end_chapter=section["end_chapter"],
-                end_page=section["end_page"],
-            )
-            if not prompts_list:
-                await interaction.followup.send("Couldn't generate prompts. Try again in a minute.")
-                return
-            async with db.pool().acquire() as conn:
-                await conn.execute(
-                    """
-                    INSERT INTO discussion_prompts (book_id, end_chapter, end_page, prompts_json)
-                    VALUES ($1, $2, $3, $4::jsonb)
-                    ON CONFLICT (book_id, end_chapter, end_page) DO NOTHING
-                    """,
-                    section["book_id"], section["end_chapter"], section["end_page"],
-                    json.dumps(prompts_list),
-                )
-            cache_status = "generated"
-
-        await db.log_event(
-            event_name="section_prompts",
-            user_id=interaction.user.id,
-            guild_id=interaction.guild_id,
-            metadata={
-                "section_id": section["id"], "book_id": section["book_id"],
-                "cache_status": cache_status, "prompt_count": len(prompts_list),
-            },
-        )
-
-        lines = [f"**Discussion prompts for {section['title']}** ({cache_status})\n"]
-        for i, p in enumerate(prompts_list, 1):
-            lines.append(f"{i}. {p}")
-        await interaction.followup.send("\n".join(lines))
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Sections(bot))

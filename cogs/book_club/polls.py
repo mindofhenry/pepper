@@ -5,10 +5,11 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-import db
+from shared import db
+from shared.errors import report_command_error
 from services import google_books
 
-log = logging.getLogger("bookclub.cogs.polls")
+log = logging.getLogger("pepper.cogs.book_club.polls")
 
 # Unicode regional indicator letters A-J. Used as reaction emoji for up to 10 options.
 LETTER_EMOJIS = ["🇦", "🇧", "🇨", "🇩", "🇪", "🇫", "🇬", "🇭", "🇮", "🇯"]
@@ -140,7 +141,7 @@ class Polls(commands.Cog):
             await interaction.followup.send(f"Too many nominations (max {len(LETTER_EMOJIS)}).")
             return
 
-        lines = [f"**Poll #{poll['id']} — vote by reacting**\n"]
+        lines = [f"**Poll #{poll['id']}, vote by reacting**\n"]
         for i, nom in enumerate(nominations):
             authors = ", ".join(nom["authors"]) or "Unknown"
             lines.append(f"{LETTER_EMOJIS[i]} **{nom['title']}** by {authors}")
@@ -283,6 +284,13 @@ class Polls(commands.Cog):
         if row["thumbnail_url"]:
             embed.set_thumbnail(url=row["thumbnail_url"])
         await interaction.response.send_message(embed=embed)
+
+    async def cog_command_error(
+        self,
+        interaction: discord.Interaction,
+        error: app_commands.AppCommandError,
+    ) -> None:
+        await report_command_error("book_club.polls", interaction, error)
 
 
 async def setup(bot: commands.Bot) -> None:

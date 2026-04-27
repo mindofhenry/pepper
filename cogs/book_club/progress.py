@@ -6,9 +6,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-import db
+from shared import db
+from shared.errors import report_command_error
 
-log = logging.getLogger("bookclub.cogs.progress")
+log = logging.getLogger("pepper.cogs.book_club.progress")
 
 
 async def _get_current_book(guild_id: int) -> Optional[dict]:
@@ -121,6 +122,13 @@ class Progress(commands.Cog):
             page_str = f", p.{r['current_page']}" if r["current_page"] else ""
             lines.append(f"- {name}: ch. {r['current_chapter']}{page_str}")
         await interaction.followup.send("\n".join(lines))
+
+    async def cog_command_error(
+        self,
+        interaction: discord.Interaction,
+        error: app_commands.AppCommandError,
+    ) -> None:
+        await report_command_error("book_club.progress", interaction, error)
 
 
 async def setup(bot: commands.Bot) -> None:

@@ -5,19 +5,19 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-import db
+from shared import db
+from shared.errors import report_command_error
 from services import google_books
 
-log = logging.getLogger("bookclub.cogs.books")
+log = logging.getLogger("pepper.cogs.book_club.search")
 
 
-class Books(commands.Cog):
+class Search(commands.Cog):
     """Cog grouping all /book subcommands."""
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    # /book is a command group. Subcommands (search, etc.) attach below.
     book_group = app_commands.Group(name="book", description="Book-related commands.")
 
     @book_group.command(name="search", description="Search Google Books for a title.")
@@ -42,6 +42,13 @@ class Books(commands.Cog):
 
         embeds = [_book_to_embed(b) for b in results]
         await interaction.followup.send(embeds=embeds)
+
+    async def cog_command_error(
+        self,
+        interaction: discord.Interaction,
+        error: app_commands.AppCommandError,
+    ) -> None:
+        await report_command_error("book_club.search", interaction, error)
 
 
 def _book_to_embed(book: google_books.BookResult) -> discord.Embed:
@@ -71,4 +78,4 @@ def _truncate(text: str, max_len: int) -> str:
 
 async def setup(bot: commands.Bot) -> None:
     """discord.py calls this when loading the extension."""
-    await bot.add_cog(Books(bot))
+    await bot.add_cog(Search(bot))
