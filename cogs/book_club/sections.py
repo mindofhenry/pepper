@@ -2,7 +2,7 @@
 dedicated discussion thread. One active section per guild at a time.
 
 The /section prompts subcommand is implemented in `prompts.py`; this cog
-just registers the command on the shared section group and delegates."""
+just registers the command on the section group and delegates."""
 import logging
 from typing import Optional
 
